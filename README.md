@@ -5,11 +5,11 @@
 
 以 archlinux 环境为例
 
-安装firefox浏览器，安装firefox的mozrepl扩展，打开firefox，启动mozrepl
+安装firefox浏览器，安装firefox的[mozrepl](https://addons.mozilla.org/en-US/firefox/addon/mozrepl/)扩展，打开firefox，启动mozrepl
 
     sudo pacman -S tcpdump wireshark-cli wireshark-common 
     sudo pacman -S curl
-    cpan App::cpanminux
+    cpan App::cpanminus
     cpanm -n -f WWW::Mechanize::Firefox JSON Encode::Locale
 
 # 分析
