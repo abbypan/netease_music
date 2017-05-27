@@ -94,14 +94,14 @@ sub view_album {
     push @{ $inf{song} }, { index => $i, song_title => $t, url => $u, song_id => $song_id };
     print "visit song url: $i $t $u\n";
     $MECH->get( $u );
-    sleep 3;
+    sleep 5;
     print "click play button: $i $t $u\n";
 
     #$MECH->eval_in_page(qq[play();]);
     my ( $play ) = $MECH->xpath( '//em[@class="ply"]', single => 1 );
     $MECH->click( $play );
     $i++;
-    sleep 3;
+    sleep 5;
   }
   return \%inf;
 } ## end sub view_album
