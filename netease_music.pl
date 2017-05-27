@@ -22,15 +22,15 @@ sub main_album {
   my ( $album_url ) = @_;
 
   my ( $album_id ) = $album_url =~ m#id=(\d+)$#;
-  my $album_cap_file = "netease_album_$album_id.pcap";
+  my $album_cap_file = "netease_music_$album_id.pcap";
 
   my $pid = fork();
   if ( $pid == 0 ) {
     system( qq[sudo tcpdump port 80 -w $album_cap_file] );
   } else {
     my $album_inf = view_album( $album_url );
-    sleep 3;
-    system( qq[ps aux|grep tcpdump|grep $album_cap_file |awk '{print \$2}'|xargs sudo kill] );
+    sleep 10;
+    system( qq[ps aux|grep tcpdump|grep netease_music |awk '{print \$2}'|xargs sudo kill] );
 
     my $song_url_inf = parse_album_cap( $album_cap_file );
 
@@ -79,7 +79,7 @@ sub view_album {
   my $album_name = $MECH->xpath( '//h2', one => 1 );
   $inf{album_name} = $album_name->{innerHTML};
 
-  my $singer = $MECH->xpath( '//p[@class="intr"]//a', one => 1 );
+  my $singer = $MECH->xpath( '//a[@class="s-fc7"]', one => 1 );
   $inf{singer} = $singer->{innerHTML};
 
   my @song = $MECH->xpath( '//div[@id="song-list-pre-cache"]//a' );
@@ -94,8 +94,10 @@ sub view_album {
     push @{ $inf{song} }, { index => $i, song_title => $t, url => $u, song_id => $song_id };
     print "visit song url: $i $t $u\n";
     $MECH->get( $u );
-    sleep 2;
+    sleep 3;
     print "click play button: $i $t $u\n";
+
+    #$MECH->eval_in_page(qq[play();]);
     my ( $play ) = $MECH->xpath( '//em[@class="ply"]', single => 1 );
     $MECH->click( $play );
     $i++;
@@ -103,4 +105,3 @@ sub view_album {
   }
   return \%inf;
 } ## end sub view_album
-

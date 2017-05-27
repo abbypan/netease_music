@@ -34,10 +34,12 @@
 
 # 用法
 
-perl netease_album.pl [album_url]
+## 专辑
 
-    perl netease_album.pl "http://music.163.com/#/album?id=14390" | tee netease_album.log
+perl netease_music.pl [album_url]
 
+    perl netease_music.pl "http://music.163.com/#/album?id=14390" | tee netease_album.log
+    
 example album download log: [netease_album.log](netease_album.log)
 
     > tree 任贤齐-老地方 
@@ -54,4 +56,12 @@ example album download log: [netease_album.log](netease_album.log)
     └── 10.想飞.mp3
 
     0 directories, 10 files
+
+## 歌单
+
+perl netease_music.pl [playlist_url]
+
+    perl netease_music.pl "http://music.163.com/#/playlist?id=161864761" | tee netease_playlist.log
+
+example playlist download log: [netease_playlist.log](netease_playlist.log)
 
