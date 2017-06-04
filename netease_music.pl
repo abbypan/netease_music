@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
 use WWW::Mechanize::Firefox;
+use File::Slurp qw/write_file slurp/;
+use FindBin;
 use Data::Dumper;
 use JSON;
 use Encode::Locale;
@@ -12,6 +14,7 @@ binmode( STDOUT, ":encoding(console_out)" );
 binmode( STDERR, ":encoding(console_out)" );
 
 our $MECH = WWW::Mechanize::Firefox->new();
+$MECH->autodie(0);
 $MECH->autoclose_tab( 1 );
 
 my ( $album_url ) = @ARGV;
@@ -28,53 +31,23 @@ sub main_album {
   if ( $pid == 0 ) {
     system( qq[sudo tcpdump port 80 -w $album_cap_file] );
   } else {
-    my $album_inf = view_album( $album_url );
+    my $album_inf = view_album( $album_url, $album_cap_file );
     sleep 10;
     system( qq[ps aux|grep tcpdump|grep netease_music |awk '{print \$2}'|xargs sudo kill] );
-
-    my $song_url_inf = parse_album_cap( $album_cap_file );
-
-    my $dir = encode( locale => "$album_inf->{singer}-$album_inf->{album_name}" );
-    mkdir $dir;
-    for my $s ( @{ $album_inf->{song} } ) {
-      next unless ( exists $song_url_inf->{ $s->{song_id} } );
-      my $song_url = $song_url_inf->{ $s->{song_id} };
-
-      my $j = sprintf( "%02d", $s->{index} );
-      my ( $suffix ) = $song_url =~ m#\.([^\.\?]+?)$#s;
-      my $song_file = "$album_inf->{singer}-$album_inf->{album_name}/$j.$s->{song_title}.$suffix";
-      print "download song: $song_file\n";
-      my $cmd = qq[curl -L -C - "$song_url" -o "$song_file"];
-      print "$cmd\n";
-      system( $cmd);
-      $i++;
-    }
-
     kill 1, $pid;
     system( qq[sudo rm $album_cap_file] );
+    write_file("$album_cap_file.info.json", encode_json($album_inf));
   } ## end else [ if ( $pid == 0 ) ]
 } ## end sub main_album
 
-sub parse_album_cap {
-  my ( $cap_file ) = @_;
-  my $c = `tshark -r "$cap_file" -E 'separator=;' -T fields -e http.file_data|grep "\\.mp3"`;
-  my @cc = split /\n/s, $c;
-  my %res;
-  for my $x ( @cc ) {
-    my $r  = decode_json( $x );
-    my $rr = $r->{data}[0];
-    $res{ $rr->{id} } = $rr->{url};
-  }
-
-  return \%res;
-}
-
 sub view_album {
-  my ( $album_url ) = @_;
+  my ( $album_url , $album_cap_file) = @_;
 
   my %inf;
   print "visit album url: $album_url\n";
   $MECH->get( $album_url );
+
+  sleep 5;
 
   my $album_name = $MECH->xpath( '//h2', one => 1 );
   $inf{album_name} = $album_name->{innerHTML};
@@ -82,26 +55,75 @@ sub view_album {
   my $singer = $MECH->xpath( '//a[@class="s-fc7"]', one => 1 );
   $inf{singer} = $singer->{innerHTML};
 
+  mkdir(encode(locale=>"$inf{singer}-$inf{album_name}"));
+
   my @song = $MECH->xpath( '//div[@id="song-list-pre-cache"]//a' );
   @song = map { $_->{outerHTML} } @song;
 
   my $i = 1;
   for my $c ( @song ) {
-    my ( $song_id ) = $c =~ m#/song\?id=(\d+)"#;
-    next unless ( $song_id );
-    my ( $u, $t ) = $c =~ m#<a href="(.+?)"><b title="(.+?)">#;
-    $u = "http://music.163.com$u";
-    push @{ $inf{song} }, { index => $i, song_title => $t, url => $u, song_id => $song_id };
-    print "visit song url: $i $t $u\n";
-    $MECH->get( $u );
-    sleep 5;
-    print "click play button: $i $t $u\n";
+      my ( $song_id ) = $c =~ m#/song\?id=(\d+)"#;
+      next unless ( $song_id );
 
-    #$MECH->eval_in_page(qq[play();]);
-    my ( $play ) = $MECH->xpath( '//em[@class="ply"]', single => 1 );
-    $MECH->click( $play );
-    $i++;
-    sleep 5;
+      my ( $u, $t ) = $c =~ m#<a href="(.+?)"><b title="(.+?)">#;
+      $u = "http://music.163.com$u";
+      push @{ $inf{song} }, { index => $i, song_title => $t, url => $u, song_id => $song_id };
+      print "visit song url: $i $t $u\n";
+
+      my $j = sprintf( "%02d", $i );
+      my $song_file = "$inf{singer}-$inf{album_name}/$j.$t.mp3";
+
+      $i++;
+
+      next if(-f encode(locale=>$song_file));
+
+      $MECH->get( $u );
+      sleep 5;
+      print "click play button: $t $u\n";
+
+      my ( $play ) = $MECH->xpath( '//em[@class="ply"]', single => 1 );
+      $MECH->synchronize( 'DOMFrameContentLoaded', sub {
+              $MECH->click( $play ) if($play);
+          }
+      );
+
+      sleep 10;
+
+      my $song_url_inf = parse_album_cap( $album_cap_file );
+      next unless(exists $song_url_inf->{ $song_id });
+      $inf{song}[-1]{song_url} = $song_url_inf->{$song_id};
+      $inf{song}[-1]{song_file} = $song_file;
+
+      download_music($song_url_inf->{$song_id}, $song_file);
+  } 
+
+  for my $s ( @{$inf{song}}){
+      download_music($s->{song_url}, $s->{song_file});
   }
+
   return \%inf;
 } ## end sub view_album
+
+sub download_music {
+    my ($song_url, $song_file) = @_;
+    return if(-f encode(locale=>$song_file));
+    my $cmd=qq[curl -v -L -C - -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:53.0) Gecko/20100101 Firefox/53.0" -H "Accept-Encoding: gzip, deflate" "$song_url" -o "$song_file"];
+    print "$cmd\n";
+    system(encode(locale=>$cmd));
+}
+
+sub parse_album_cap {
+  my ( $cap_file ) = @_;
+  my $c = `tshark -r "$cap_file" -E 'separator=;' -T fields -e http.file_data|grep "\\.mp3"`;
+  my @cc = split /\n/s, $c;
+  my %res;
+  for my $x ( @cc ) {
+    next unless($x=~/\Q{"data":/);
+    my $r  = decode_json( $x );
+    my $rr = $r->{data}[0];
+    $res{ $rr->{id} } = $rr->{url};
+  }
+#print Dumper(\%res);
+  return \%res;
+}
+
