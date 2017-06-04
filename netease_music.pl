@@ -97,8 +97,8 @@ sub view_album {
       download_music($song_url_inf->{$song_id}, $song_file);
   } 
 
-  for my $s ( @{$inf{song}}){
-      download_music($s->{song_url}, $s->{song_file});
+  for my $s (@{$inf{song}}){
+      download_music($s->{song_url}, $s->{song_file}) if($s->{song_url});
   }
 
   return \%inf;
@@ -107,7 +107,7 @@ sub view_album {
 sub download_music {
     my ($song_url, $song_file) = @_;
     return if(-f encode(locale=>$song_file));
-    my $cmd=qq[curl -v -L -C - -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:53.0) Gecko/20100101 Firefox/53.0" -H "Accept-Encoding: gzip, deflate" "$song_url" -o "$song_file"];
+    my $cmd=qq[curl -L -C - -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:53.0) Gecko/20100101 Firefox/53.0" -H "Accept-Encoding: gzip, deflate" "$song_url" -o "$song_file"];
     print "$cmd\n";
     system(encode(locale=>$cmd));
 }

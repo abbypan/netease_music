@@ -67,4 +67,4 @@ example playlist download log: [netease_playlist.log](netease_playlist.log)
 
 ## 音乐信息
 
-example music list log: [netease_music_14390.pcap.json](netease_music_14390.pcap.json)
+example music list log: [netease_music_14390.pcap.info.json](netease_music_14390.pcap.info.json)
