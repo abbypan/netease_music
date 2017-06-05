@@ -57,7 +57,7 @@ sub view_album {
 
   mkdir(encode(locale=>"$inf{singer}-$inf{album_name}"));
 
-  my @song = $MECH->xpath( '//div[@id="song-list-pre-cache"]//a' );
+  my @song = $MECH->xpath( '//div[@id="song-list-pre-cache"]//tbody//tr' );
   @song = map { $_->{outerHTML} } @song;
 
   my $i = 1;
@@ -65,16 +65,20 @@ sub view_album {
       my ( $song_id ) = $c =~ m#/song\?id=(\d+)"#;
       next unless ( $song_id );
 
+      my ($class) = $c=~m#^.*?class="(.*?)"#;
+      my $is_valid = $class=~/js-dis/ ? 0 : 1;
+
       my ( $u, $t ) = $c =~ m#<a href="(.+?)"><b title="(.+?)">#;
       $u = "http://music.163.com$u";
-      push @{ $inf{song} }, { index => $i, song_title => $t, url => $u, song_id => $song_id };
-      print "visit song url: $i $t $u\n";
+      push @{ $inf{song} }, { index => $i, song_title => $t, url => $u, song_id => $song_id, is_valid => $is_valid };
+      print "visit song url: $i $t $u, is_valid: $is_valid\n";
 
       my $j = sprintf( "%02d", $i );
       my $song_file = "$inf{singer}-$inf{album_name}/$j.$t.mp3";
 
       $i++;
 
+      next unless($is_valid);
       next if(-f encode(locale=>$song_file));
 
       $MECH->get( $u );
