@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 
+use strict;
+use warnings;
+use utf8;
+
 use WWW::Mechanize::Firefox;
 use File::Slurp qw/write_file slurp/;
 use FindBin;
@@ -7,7 +11,8 @@ use Data::Dumper;
 use JSON;
 use Encode::Locale;
 use Encode;
-use utf8;
+use HTML::Entities;
+
 $| = 1;
 binmode( STDIN,  ":encoding(console_in)" );
 binmode( STDOUT, ":encoding(console_out)" );
@@ -31,8 +36,11 @@ sub main_album {
   if ( $pid == 0 ) {
     system( qq[sudo tcpdump port 80 -w $album_cap_file] );
   } else {
-    my $album_inf = view_album( $album_url, $album_cap_file );
-    sleep 10;
+    my $album_inf;
+    for(1 .. 3){#retry 3 times
+        $album_inf = view_album( $album_url, $album_cap_file );
+        sleep 10;
+    }
     system( qq[ps aux|grep tcpdump|grep netease_music |awk '{print \$2}'|xargs sudo kill] );
     kill 1, $pid;
     system( qq[sudo rm $album_cap_file] );
@@ -50,10 +58,10 @@ sub view_album {
   sleep 5;
 
   my $album_name = $MECH->xpath( '//h2', one => 1 );
-  $inf{album_name} = $album_name->{innerHTML};
+  $inf{album_name} = tidy_html_string($album_name->{innerHTML});
 
   my $singer = $MECH->xpath( '//a[@class="s-fc7"]', one => 1 );
-  $inf{singer} = $singer->{innerHTML};
+  $inf{singer} = tidy_html_string($singer->{innerHTML});
 
   mkdir(encode(locale=>"$inf{singer}-$inf{album_name}"));
 
@@ -70,11 +78,19 @@ sub view_album {
 
       my ( $u, $t ) = $c =~ m#<a href="(.+?)"><b title="(.+?)">#;
       $u = "http://music.163.com$u";
-      push @{ $inf{song} }, { index => $i, song_title => $t, url => $u, song_id => $song_id, is_valid => $is_valid };
-      print "visit song url: $i $t $u, is_valid: $is_valid\n";
-
+      $t = tidy_html_string($t);
       my $j = sprintf( "%02d", $i );
       my $song_file = "$inf{singer}-$inf{album_name}/$j.$t.mp3";
+
+      print "visit song url: $j $t $u, is_valid: $is_valid\n";
+      push @{ $inf{song} }, {
+          index => $j, 
+          song_title => $t, 
+          url => $u, 
+          song_id => $song_id, 
+          is_valid => $is_valid, 
+          song_file => $song_file,
+      };
 
       $i++;
 
@@ -83,7 +99,7 @@ sub view_album {
 
       $MECH->get( $u );
       sleep 5;
-      print "click play button: $t $u\n";
+      print "click play button\n";
 
       my ( $play ) = $MECH->xpath( '//em[@class="ply"]', single => 1 );
       $MECH->synchronize( 'DOMFrameContentLoaded', sub {
@@ -131,3 +147,9 @@ sub parse_album_cap {
   return \%res;
 }
 
+sub tidy_html_string {
+    my ($s) = @_;
+    my $ss = decode_entities($s);
+    $ss=~s/[\|\/\\:;<>\s\?\[\]\{\}\*]+/_/g;
+    return $ss;
+}

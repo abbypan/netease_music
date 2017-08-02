@@ -10,7 +10,7 @@
     sudo pacman -S tcpdump wireshark-cli wireshark-common 
     sudo pacman -S curl
     cpan App::cpanminus
-    cpanm -n -f WWW::Mechanize::Firefox JSON Encode::Locale
+    cpanm -n -f WWW::Mechanize::Firefox JSON Encode::Locale HTML::Entities
 
 # 分析
 
